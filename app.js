@@ -14,20 +14,14 @@
     { index: 10, name: '结尾 · 今日晴天', shape: '竖图 3:4' },
     { index: 11, name: '结尾 · 以后每一天', shape: '竖图 3:4' },
   ];
-  const defaults = { groom: '新郎', bride: '新娘', date: '', time: '', venue: '', address: '', mapUrl: '', groomPhone: '', bridePhone: '', fontData: '', fontName: '', schedule: ['15:30', '16:00', '17:00', '19:00'], photos: Array.from({ length: 12 }, () => ''), editorEnabled: true };
+  const defaults = { groom: '新郎', bride: '新娘', date: '', time: '', venue: '', address: '', mapUrl: '', groomPhone: '', bridePhone: '', fontData: '', fontName: '', schedule: ['15:30', '16:00', '17:00', '19:00'], photos: Array.from({ length: 12 }, () => '') };
   const initial = Object.assign({}, defaults, window.WEDDING_CONFIG || {});
-  const owner = initial.editorEnabled !== false || new URLSearchParams(location.search).get('edit') === '1';
-  const storageKey = `wedding-island-draft:${initial.groom}:${initial.bride}:${initial.date}`;
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
   let config = Object.assign({}, initial);
-  let photoDraft = [];
   let toastTimer;
   let lastFocus;
   let receiptText = '';
-  let pendingPhotos = 0;
-  let fontDraft = { data: '', name: '' };
-  let pendingFont = false;
   let customFont;
   let appliedFontData = '';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -49,7 +43,6 @@
     result.photos = defaults.photos.map((_, i) => safePhoto(value.photos?.[i]));
     return result;
   }
-  if (owner) { try { const draft = JSON.parse(localStorage.getItem(storageKey)); if (draft && typeof draft === 'object') config = Object.assign({}, config, draft); } catch {} }
   config = normalize(config);
 
   function toast(message) {
@@ -116,7 +109,6 @@
         content.append(image); frame.dataset.loaded = 'true';
       } else { frame.dataset.loaded = 'false'; }
     });
-    $('#setup-button').hidden = !owner;
     const named = config.groom !== '新郎' || config.bride !== '新娘';
     document.title = named ? `${config.groom} & ${config.bride} · 婚礼森友会` : '集合啦！婚礼森友会';
     $('meta[property="og:title"]').content = document.title;
@@ -124,36 +116,200 @@
   }
   render();
 
-  const blessingKey = `wedding-island-blessings:${initial.groom}:${initial.bride}:${initial.date}`;
+  const steps = ['home', 'letter', 'boarding', 'story', 'album', 'schedule', 'rsvp'];
+  let unlockedStep = 0;
+  let openingComplete = false;
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  function updateJourney() {
+    $$('[data-journey]').forEach(element => { element.hidden = steps.indexOf(element.dataset.journey) > unlockedStep; });
+    $$('#page-nav a, #page-nav [data-rsvp]').forEach(link => {
+      const target = link.hasAttribute('data-rsvp') ? 'rsvp' : link.hash.slice(1);
+      link.setAttribute('aria-disabled', String(steps.indexOf(target) > unlockedStep));
+    });
+  }
+  function goToStep(target, advance = false) {
+    const index = steps.indexOf(target);
+    if (!openingComplete || index < 0) return;
+    if (advance && index === unlockedStep + 1 && target !== 'story') { unlockedStep = index; updateJourney(); }
+    if (index > unlockedStep) { toast('先完成当前的小岛旅程，再去下一站吧 ♡'); return; }
+    const section = target === 'letter' ? $('[data-journey="letter"]') : $(`#${target}`);
+    section.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' });
+    section.setAttribute('tabindex', '-1'); section.focus({ preventScroll: true });
+  }
+  updateJourney();
+  document.addEventListener('click', event => {
+    const next = event.target.closest('[data-next]');
+    if (next) { event.preventDefault(); goToStep(next.dataset.next, true); return; }
+    const link = event.target.closest('a[href^="#"]');
+    if (link && steps.includes(link.hash.slice(1))) { event.preventDefault(); goToStep(link.hash.slice(1)); }
+  });
+  // Hash URLs and browser history must obey the same progression as the navigation.
+  function guardHash() {
+    const target = location.hash.slice(1);
+    if (steps.includes(target) && (!openingComplete || steps.indexOf(target) > unlockedStep)) {
+      history.replaceState(null, '', location.pathname + location.search);
+      if (openingComplete) goToStep(steps[unlockedStep]);
+    }
+  }
+  window.addEventListener('hashchange', guardHash); guardHash();
+
   let blessings = 0;
-  try { blessings = Math.max(0, Math.min(999999999, Number(localStorage.getItem(blessingKey)) || 0)); } catch {}
+  let sharedStats = false;
+  let statsBusy = false;
+  let visitRecorded = false;
+  let statsTask = Promise.resolve();
+  let publishTask;
+  const onlinePage = ['http:', 'https:'].includes(location.protocol);
+  const visitId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   function renderBlessings() {
     const status = $('#blessing-status'); status.replaceChildren();
-    status.append(document.createTextNode(blessings ? '你是第 ' : '已收到 '));
+    status.append(document.createTextNode(sharedStats ? '已收到 ' : '小岛已收到 '));
     const count = document.createElement('b'); count.id = 'blessing-count'; count.textContent = blessings.toLocaleString('zh-CN');
-    status.append(count, document.createTextNode(blessings ? ' 位祝福者' : ' 份祝福'));
+    status.append(count, document.createTextNode(' 份祝福'));
+    $('#blessing-button').disabled = statsBusy || messageSent;
+    $('#blessing-button span').textContent = messageSent ? '祝福已送达' : '写句祝福';
+    $$('[data-write-blessing]').forEach(button => { button.disabled = statsBusy || messageSent; });
   }
-  renderBlessings();
-  $('#blessing-button').addEventListener('click', () => {
-    blessings = Math.min(999999999, blessings + 1); renderBlessings();
-    try { localStorage.setItem(blessingKey, String(blessings)); } catch {}
-    const pop = $('#blessing-pop'); pop.classList.remove('pop'); void pop.offsetWidth; pop.classList.add('pop');
-    toast('收到你的祝福啦！幸福值 +1 ♡'); celebrate();
+  async function statsRequest(path, body) {
+    const response = await fetch(path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error('Statistics unavailable');
+    const data = await response.json();
+    if (![data.visits, data.visitors, data.blessings].every(value => Number.isSafeInteger(value) && value >= 0) || typeof data.blessed !== 'boolean') throw new Error('Invalid statistics');
+    return data;
+  }
+  function applyStats(data) {
+    sharedStats = true; blessings = data.blessings; messageSent = data.messageSent === true;
+    $('#visit-status').textContent = `小岛已迎来 ${data.visits.toLocaleString('zh-CN')} 次访问 · ${data.visitors.toLocaleString('zh-CN')} 位访客`;
+    renderBlessings();
+  }
+  function refreshStats() {
+    if (!onlinePage || statsBusy) return statsTask;
+    statsBusy = true; renderBlessings();
+    statsTask = (async () => {
+      try { applyStats(await statsRequest(visitRecorded ? '/api/stats' : '/api/visits', visitRecorded ? undefined : { visitId })); visitRecorded = true; }
+      catch { $('#visit-status').textContent = '小岛访问数据暂未连接'; }
+      finally { statsBusy = false; renderBlessings(); }
+    })();
+    return statsTask;
+  }
+  let messageSent = false;
+  let blessingMessages = [];
+  let feedTask;
+  const streams = $$('.blessing-stream');
+  function renderMessages() {
+    streams.forEach(stream => {
+      const lanes = stream.querySelector('.stream-lanes'); lanes.replaceChildren();
+      stream.querySelector('.stream-empty').hidden = blessingMessages.length > 0;
+      stream.querySelector('.stream-toggle').hidden = !blessingMessages.length;
+      if (!blessingMessages.length) return;
+      for (let row = 0; row < Math.min(2, blessingMessages.length); row++) {
+        const track = document.createElement('div'); track.className = 'stream-track';
+        const items = blessingMessages.filter((_, index) => index % 2 === row).slice(0, 8);
+        const group = document.createElement('div'); group.className = 'stream-group';
+        items.forEach(item => { const chip = document.createElement('span'); chip.className = 'blessing-chip'; chip.textContent = `${item.name}：${item.message}`; group.append(chip); });
+        track.style.setProperty('--scroll-duration', `${Math.max(24, items.reduce((total, item) => total + Math.min(item.message.length + item.name.length, 46) * 13 + 55, 0) / 35)}s`);
+        // A message occupies one lane; restart only after the track has left the viewport.
+        track.append(group); lanes.append(track);
+      }
+    });
+    const history = $('#blessing-history'); history.replaceChildren();
+    blessingMessages.forEach(item => { const li = document.createElement('li'); const name = document.createElement('b'); name.textContent = item.name; const message = document.createElement('p'); message.textContent = item.message; li.append(name, message); history.append(li); });
+  }
+  function refreshMessages(afterWrite = false) {
+    if (feedTask) return afterWrite ? feedTask.then(() => refreshMessages()) : feedTask;
+    $('#refresh-blessings').disabled = true;
+    feedTask = (async () => {
+      try {
+        if (!onlinePage) throw new Error('Offline invitation');
+        const response = await fetch('/api/blessings', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(8000) });
+        if (!response.ok) throw new Error('Blessings unavailable');
+        const data = await response.json();
+        if (!Array.isArray(data.messages)) throw new Error('Invalid blessings');
+        blessingMessages = data.messages.filter(item => typeof item?.name === 'string' && item.name.length <= 24 && typeof item.message === 'string' && item.message.length <= 160).slice(0, 50);
+        streams.forEach(stream => { stream.querySelector('.stream-empty').textContent = '还没有祝福来信，等你写下第一句 ♡'; });
+        renderMessages(); $('#blessing-feed-status').textContent = blessingMessages.length ? '来自大家的真实祝福，正在飘向小岛。' : '写下的祝福会出现在这里。';
+      } catch {
+        streams.forEach(stream => { stream.querySelector('.stream-empty').textContent = onlinePage ? '祝福来信暂时读不到，稍后再来看看 ♡' : '联网后，就能看到大家的祝福 ♡'; });
+        $('#blessing-feed-status').textContent = blessingMessages.length ? '暂时无法更新，继续展示已读取的祝福。' : '祝福暂未连接，可稍后刷新。';
+      }
+    })().finally(() => { feedTask = undefined; $('#refresh-blessings').disabled = false; });
+    return feedTask;
+  }
+  streams.forEach(stream => {
+    const button = stream.querySelector('.stream-toggle');
+    if (reducedMotion) { button.textContent = '静态祝福'; button.disabled = true; }
+    button.addEventListener('click', () => { const paused = stream.classList.toggle('is-paused'); button.setAttribute('aria-pressed', String(paused)); button.textContent = paused ? '继续弹幕' : '暂停弹幕'; });
+  });
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => entry.target.classList.toggle('is-offscreen', !entry.isIntersecting)));
+    streams.forEach(stream => observer.observe(stream));
+  }
+  document.addEventListener('visibilitychange', () => streams.forEach(stream => stream.classList.toggle('page-hidden', document.hidden)));
+  $('#refresh-blessings').addEventListener('click', () => refreshMessages());
+  refreshMessages();
+
+  function openBlessing() {
+    if (!openingComplete) return;
+    if (messageSent) { toast('你的祝福已经在小岛上啦 ♡'); return; }
+    $('#blessing-form-status').textContent = '';
+    showDialog($('#blessing-dialog'));
+  }
+  $('#blessing-button').addEventListener('click', openBlessing);
+  $$('[data-write-blessing]').forEach(button => button.addEventListener('click', openBlessing));
+  function publishBlessing(payload) {
+    if (publishTask) return publishTask;
+    publishTask = (async () => {
+      await statsTask;
+      if (messageSent) return false;
+      statsBusy = true; renderBlessings();
+      try {
+        if (!onlinePage) throw new Error('Offline invitation');
+        if (!visitRecorded) { applyStats(await statsRequest('/api/visits', { visitId })); visitRecorded = true; }
+        if (messageSent) return false;
+        const result = await statsRequest('/api/blessings', payload);
+        if (result.messageSent !== true) throw new Error('Blessing not persisted');
+        applyStats(result);
+        await refreshMessages(true);
+        return true;
+      } finally { statsBusy = false; renderBlessings(); }
+    })().finally(() => { publishTask = undefined; });
+    return publishTask;
+  }
+  $('#blessing-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (publishTask || messageSent) return;
+    const form = event.currentTarget;
+    const message = form.elements.message.value.trim();
+    if (!message) { $('#blessing-form-status').textContent = '先写一句祝福，再寄往小岛吧。'; return; }
+    const payload = { name: form.elements.name.value.trim(), message };
+    $('#send-blessing').disabled = true;
+    try {
+      const published = await publishBlessing(payload);
+      closeDialog($('#blessing-dialog')); form.reset();
+      const pop = $('#blessing-pop'); pop.classList.remove('pop'); void pop.offsetWidth; pop.classList.add('pop');
+      toast(published ? '祝福已寄出，正在飘向小岛 ♡' : '你之前的祝福已经送达，未重复发布 ♡'); celebrate();
+    } catch { $('#blessing-form-status').textContent = '祝福暂未送达，内容已保留，请稍后再试。'; }
+    finally { $('#send-blessing').disabled = false; }
   });
 
-  let openingTimer;
+  renderBlessings(); refreshStats();
+  window.addEventListener('online', () => { refreshStats(); refreshMessages(); });
+
   function enterIsland(withMusic = false) {
     const opening = $('#gift-opening'); if (opening.hidden || opening.classList.contains('leaving')) return;
-    clearTimeout(openingTimer); opening.classList.add('leaving');
-    $('#invitation').inert = false; $('#page-nav').inert = false;
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    opening.classList.add('leaving');
     if (withMusic) setMusic(true, true);
-    setTimeout(() => { opening.hidden = true; if (withMusic) $('#hero-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }, reducedMotion ? 0 : 550);
+    setTimeout(() => {
+      opening.hidden = true; openingComplete = true;
+      $('#invitation').inert = false; $('#page-nav').inert = false;
+      $('#hero-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' });
+    }, reducedMotion ? 0 : 550);
   }
   $('#hero-title').setAttribute('tabindex', '-1');
   $('#open-gift').addEventListener('click', () => enterIsland(true));
   $('#skip-opening').addEventListener('click', () => enterIsland(true));
-  openingTimer = setTimeout(() => enterIsland(false), 3000);
+  $('#open-gift').focus({ preventScroll: true });
 
   function showDialog(dialog) {
     lastFocus = document.activeElement;
@@ -168,13 +324,17 @@
 
   const flight = $('#flight-dialog');
   let flightTimers = [];
+  let flightLanded = false;
   $('#board-button').addEventListener('click', () => {
+    if (!openingComplete || unlockedStep < steps.indexOf('boarding') || flight.open) return;
+    flightLanded = false;
     flightTimers.forEach(clearTimeout); flightTimers = [];
     flight.classList.remove('landed'); $('#flight-arrival').hidden = true;
     $('#flight-title').textContent = '幸福小岛航班，准备起飞';
     $('#flight-status').textContent = '机票已确认，请系好安全带。';
     showDialog(flight);
     const land = () => {
+      flightLanded = true;
       flight.classList.add('landed');
       $('#flight-title').textContent = '欢迎抵达，幸福小岛！';
       $('#flight-status').textContent = '今天的小岛天气晴朗，两位新人正在婚礼广场等你。';
@@ -188,21 +348,42 @@
   });
   flight.addEventListener('close', () => { flightTimers.forEach(clearTimeout); flightTimers = []; });
   $('#flight-arrival').addEventListener('click', () => {
+    if (!flightLanded) return;
+    unlockedStep = Math.max(unlockedStep, steps.indexOf('story')); updateJourney();
     closeDialog(flight);
-    setTimeout(() => { $('#story').scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' }); }, 40);
+    setTimeout(() => goToStep('story'), 40);
   });
 
   const rsvpForm = $('#rsvp-form');
-  $$('[data-rsvp]').forEach((button) => button.addEventListener('click', () => $('#rsvp').scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth' })));
+  $$('[data-rsvp]').forEach((button) => button.addEventListener('click', () => goToStep('rsvp')));
   rsvpForm.elements.attendance.addEventListener('change', () => { $('#guests-label').hidden = rsvpForm.elements.attendance.value === 'bless'; });
-  rsvpForm.addEventListener('submit', (event) => {
+  let rsvpSubmitting = false;
+  rsvpForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (rsvpSubmitting) return;
     const guest = rsvpForm.elements.guest.value.trim();
     if (!guest) { rsvpForm.elements.guest.setCustomValidity('请告诉我们你的名字。'); rsvpForm.elements.guest.reportValidity(); return; }
     rsvpForm.elements.guest.setCustomValidity('');
     const attending = rsvpForm.elements.attendance.value === 'attend';
     const count = rsvpForm.elements.guests.value;
-    const wish = rsvpForm.elements.wish.value.trim() || '祝你们新婚快乐，往后的每一天都有爱与晴天。';
+    const writtenWish = rsvpForm.elements.wish.value.trim();
+    const wish = writtenWish || '祝你们新婚快乐，往后的每一天都有爱与晴天。';
+    const submit = rsvpForm.querySelector('[type=submit]');
+    if (writtenWish) {
+      rsvpSubmitting = true; submit.disabled = true;
+      $('#rsvp-save-status').textContent = '正在寄出你的祝福…';
+      try {
+        const published = await publishBlessing({ name: guest, message: writtenWish });
+        $('#receipt-blessing-status').textContent = published ? '这句祝福已保存，会在首页和结尾弹幕展示。' : '你之前的公开祝福已送达，本次回执不会重复发布或覆盖它。';
+        $('#rsvp-save-status').textContent = '';
+      } catch {
+        $('#rsvp-save-status').textContent = '祝福暂未送达，填写内容已保留，请点击下方按钮重试。';
+        return;
+      } finally { rsvpSubmitting = false; submit.disabled = false; }
+    } else {
+      $('#rsvp-save-status').textContent = '';
+      $('#receipt-blessing-status').textContent = '没有填写祝福文字，本次只生成赴约回执。';
+    }
     const summary = attending ? `一定赴约 · 共 ${count} 位\n期待登岛，见证你们的幸福！` : '虽然无法到场，祝福一定准时抵达。';
     $('#receipt-name').textContent = `${guest} ${attending ? '准备好登岛啦' : '为你们送上祝福'}`;
     $('#receipt-summary').textContent = summary; $('#receipt-wish').textContent = wish;
@@ -234,7 +415,7 @@
 
   $$('.album-photo').forEach((frame) => frame.addEventListener('click', () => {
     const src = config.photos[Number(frame.dataset.photo)];
-    if (!src || frame.dataset.loaded === 'false') { toast(owner ? '这里留给你们的婚纱照，可在页面底部「布置我的小岛」中添加。' : '小岛的回忆正在整理中，敬请期待 ♡'); return; }
+    if (!src || frame.dataset.loaded === 'false') { toast('小岛的回忆正在整理中，敬请期待 ♡'); return; }
     $('#preview-photo').src = src; showDialog($('#photo-dialog'));
   }));
   $('#map-button').addEventListener('click', async () => {
@@ -260,143 +441,6 @@
   $('#calendar-button').addEventListener('click', () => {
     if (!config.date) { toast('婚期确定后，就可以把幸福记在日历里啦。'); return; }
     download(new Blob([calendarText()], { type: 'text/calendar;charset=utf-8' }), '幸福小岛-婚礼日历.ics'); toast('已生成婚礼日历，打开文件即可添加。');
-  });
-
-  const setupForm = $('#setup-form');
-  function renderPhotoPickers() {
-    const container = $('#photo-inputs'); container.replaceChildren();
-    photoSlots.forEach(({ index: i, name, shape }, position) => {
-      const group = document.createElement('div');
-      const label = document.createElement('label'); label.className = 'photo-picker';
-      const preview = document.createElement('span'); preview.className = 'picker-preview';
-      if (photoDraft[i]) { const image = new Image(); image.src = photoDraft[i]; image.alt = name; preview.append(image); }
-      else { preview.innerHTML = '<svg><use href="#i-camera"/></svg>'; }
-      const caption = document.createElement('span'); caption.textContent = `${String(position + 1).padStart(2, '0')} ${name}`;
-      const hint = document.createElement('small'); hint.textContent = shape;
-      const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif'; input.setAttribute('aria-label', `选择${name}`);
-      input.addEventListener('change', async () => {
-        const file = input.files[0]; if (!file) return;
-        if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { toast('请选择 JPG、PNG 或 WebP 图片。'); return; }
-        if (file.size > 25 * 1024 * 1024) { toast('请先将照片缩小到 25 MB 以内。'); return; }
-        pendingPhotos++; $('#setup-error').textContent = '正在整理照片，请稍候…';
-        try { photoDraft[i] = await resizePhoto(file); renderPhotoPickers(); $('#setup-error').textContent = ''; }
-        catch { $('#setup-error').textContent = '这张照片暂时无法读取，请换一张 JPG 或 PNG。'; }
-        finally { pendingPhotos--; }
-      });
-      label.append(preview, caption, hint, input); group.append(label);
-      if (photoDraft[i]) { const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'photo-remove'; remove.textContent = '留空此位置'; remove.setAttribute('aria-label', `移除${name}`); remove.addEventListener('click', () => { photoDraft[i] = ''; renderPhotoPickers(); }); group.append(remove); }
-      container.append(group);
-    });
-  }
-  function resizePhoto(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader(); reader.onerror = reject;
-      reader.onload = () => {
-        const image = new Image(); image.onerror = reject;
-        image.onload = () => { const max = 1440; const ratio = Math.min(1, max / Math.max(image.naturalWidth, image.naturalHeight)); const canvas = document.createElement('canvas'); canvas.width = Math.round(image.naturalWidth * ratio); canvas.height = Math.round(image.naturalHeight * ratio); const ctx = canvas.getContext('2d'); if (!ctx) { reject(); return; } ctx.fillStyle = '#fffdf6'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(image, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', .86)); };
-        image.src = reader.result;
-      }; reader.readAsDataURL(file);
-    });
-  }
-  function openSetup() {
-    ['groom', 'bride', 'date', 'time', 'venue', 'address', 'mapUrl', 'groomPhone', 'bridePhone'].forEach((key) => { setupForm.elements[key].value = config[key]; });
-    config.schedule.forEach((time, i) => { setupForm.elements[`schedule${i}`].value = time; });
-    photoDraft = config.photos.slice(); fontDraft = { data: config.fontData, name: config.fontName }; updateFontStatus(); $('#font-input').value = ''; renderPhotoPickers(); $('#setup-error').textContent = ''; showDialog($('#setup-dialog'));
-  }
-  $('#setup-button').addEventListener('click', openSetup);
-  function collectSettings() {
-    if (pendingPhotos || pendingFont) { $('#setup-error').textContent = '照片或字体还在整理，稍等一下再保存。'; return null; }
-    if (!setupForm.reportValidity()) return null;
-    const next = Object.assign({}, config);
-    ['groom', 'bride', 'date', 'time', 'venue', 'address', 'mapUrl', 'groomPhone', 'bridePhone'].forEach((key) => { next[key] = setupForm.elements[key].value.trim(); });
-    next.fontData = fontDraft.data; next.fontName = fontDraft.name;
-    next.schedule = [0, 1, 2, 3].map((i) => setupForm.elements[`schedule${i}`].value);
-    if (next.time) { next.schedule[1] = next.time; setupForm.elements.schedule1.value = next.time; }
-    if (next.mapUrl && !/^https?:\/\//i.test(next.mapUrl)) { $('#setup-error').textContent = '地图链接需要以 https:// 或 http:// 开头。'; return null; }
-    if (next.schedule.some((time, i, times) => i > 0 && time < times[i - 1])) { $('#setup-error').textContent = '请按先后顺序填写当天日程；仪式时间会同步到「心动仪式」。'; return null; }
-    next.photos = photoDraft.slice(); return normalize(next);
-  }
-  function saveDraft() {
-    try { localStorage.setItem(storageKey, JSON.stringify(config)); return true; } catch { return false; }
-  }
-  setupForm.addEventListener('submit', (event) => {
-    event.preventDefault(); const next = collectSettings(); if (!next) return;
-    config = next; render(); const stored = saveDraft(); closeDialog($('#setup-dialog'));
-    toast(stored ? '小岛布置好啦，快看看你们的专属邀请 ♡' : '已更新预览；浏览器空间不足，请重新打开布置面板导出保存。');
-  });
-  setupForm.elements.time.addEventListener('input', () => { if (setupForm.elements.time.value) setupForm.elements.schedule1.value = setupForm.elements.time.value; });
-  setupForm.elements.schedule1.addEventListener('input', () => { setupForm.elements.time.value = setupForm.elements.schedule1.value; });
-  function updateFontStatus() { $('#font-status').textContent = fontDraft.data ? `已选择：${fontDraft.name}。保存后应用到全部文字，并随邀请函一起导出。` : '当前为寒蝉半圆体，非已验证的港版原字库。若你有可使用的原字体，可在这里替换全部文字。'; }
-  $('#font-input').addEventListener('change', async (event) => {
-    const file = event.target.files[0]; if (!file) return;
-    if (!/\.(woff2?|ttf|otf)$/i.test(file.name) || file.size > 15 * 1024 * 1024) { toast('请选择 15 MB 以内的 WOFF、WOFF2、TTF 或 OTF 字体。'); return; }
-    pendingFont = true;
-    try {
-      const buffer = await file.arrayBuffer();
-      await new FontFace('IslandFontValidation', buffer).load();
-      const encoded = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(new Blob([buffer], { type: 'font/woff2' })); });
-      fontDraft = { data: encoded, name: file.name }; updateFontStatus();
-    } catch { toast('这个字体文件无法读取，请换一个文件。'); }
-    finally { pendingFont = false; }
-  });
-  $('#reset-font').addEventListener('click', () => { fontDraft = { data: '', name: '' }; $('#font-input').value = ''; updateFontStatus(); });
-
-  async function dataUrl(url) {
-    const response = await fetch(url); if (!response.ok) throw new Error('asset fetch failed');
-    const blob = await response.blob(); return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); });
-  }
-  async function standaloneSource(next) {
-    const root = document.documentElement.cloneNode(true);
-    root.classList.remove('js-ready'); root.querySelectorAll('.reveal').forEach((element) => element.classList.remove('visible'));
-    root.querySelector('body').style.overflow = '';
-    root.style.removeProperty('--font');
-    root.querySelector('#gift-opening').hidden = false; root.querySelector('#gift-opening').classList.remove('leaving');
-    root.querySelector('#invitation').inert = true; root.querySelector('#page-nav').inert = true;
-    root.querySelector('#blessing-status').innerHTML = '已收到 <b id="blessing-count">0</b> 份祝福';
-    root.querySelector('#blessing-pop').classList.remove('pop');
-    root.querySelector('#font-input').value = ''; root.querySelector('#font-status').textContent = '可上传你有权使用的字体，并随邀请函导出。';
-    root.querySelectorAll('dialog').forEach((element) => element.removeAttribute('open'));
-    root.querySelector('#confetti').replaceChildren(); root.querySelector('#toast').classList.remove('visible'); root.querySelector('#toast').textContent = '';
-    root.querySelector('#rsvp-form').hidden = false; root.querySelector('#rsvp-result').hidden = true;
-    ['#receipt-name', '#receipt-summary', '#receipt-wish', '#setup-error'].forEach((selector) => { root.querySelector(selector).textContent = ''; });
-    root.querySelector('#guests-label').hidden = false;
-    root.querySelector('#setup-button').hidden = true;
-    root.querySelectorAll('input,textarea').forEach((element) => { element.removeAttribute('value'); if (element.tagName === 'TEXTAREA') element.textContent = ''; });
-    root.querySelector('#photo-inputs').replaceChildren(); root.querySelector('#preview-photo').removeAttribute('src');
-    root.querySelectorAll('button[disabled]').forEach((element) => element.removeAttribute('disabled'));
-    root.querySelectorAll('.photo-content img').forEach((element) => element.remove());
-    root.querySelectorAll('.music-button').forEach((button) => { button.setAttribute('aria-pressed', 'false'); button.setAttribute('aria-label', '开启小岛音乐'); });
-    const exportConfig = Object.assign({}, next, { editorEnabled: false, photos: next.photos.slice() });
-    for (let i = 0; i < exportConfig.photos.length; i++) { const src = exportConfig.photos[i]; if (src && !src.startsWith('data:')) exportConfig.photos[i] = await dataUrl(new URL(src, location.href).href); }
-    const script = root.querySelector('#wedding-config'); script.removeAttribute('src'); script.removeAttribute('defer');
-    script.textContent = `window.WEDDING_CONFIG = ${JSON.stringify(exportConfig).replace(/</g, '\\u003c')};`;
-    for (const stylesheet of root.querySelectorAll('link[rel="stylesheet"]')) {
-      const response = await fetch(stylesheet.href); if (!response.ok) throw new Error('css fetch failed'); let css = await response.text();
-      const urls = Array.from(new Set(Array.from(css.matchAll(/url\(['"]?([^)'"\s]+)['"]?\)/g), (match) => match[1])));
-      for (const url of urls) { if (url.startsWith('data:') || url.startsWith('#')) continue; const encoded = await dataUrl(new URL(url, stylesheet.href).href); css = css.split(url).join(encoded); }
-      const style = document.createElement('style'); style.textContent = css; stylesheet.replaceWith(style);
-    }
-    const app = root.querySelector('#app-code');
-    if (app.hasAttribute('src')) { const response = await fetch(app.src); if (!response.ok) throw new Error('js fetch failed'); app.textContent = await response.text(); app.removeAttribute('src'); app.removeAttribute('defer'); }
-    // Inline scripts run after the complete DOM, including when opened directly as a file.
-    app.remove(); root.querySelector('body').append(app);
-    for (const image of root.querySelectorAll('img[src],audio[src],source[src],link[rel="icon"]')) { const attr = image.tagName === 'LINK' ? 'href' : 'src'; const src = image.getAttribute(attr); if (src && !src.startsWith('data:')) image.setAttribute(attr, await dataUrl(new URL(src, location.href).href)); }
-    if (!root.querySelector('#third-party-notices')) {
-      const notices = await Promise.all(['REFERENCE-LICENSE.txt', 'FONT-LICENSES.txt', 'ROUND-FONT-LICENSE.txt', '资源来源.md'].map(async (file) => { const response = await fetch(new URL(file, location.href)); if (!response.ok) throw new Error('notice fetch failed'); return response.text(); }));
-      const notice = document.createElement('script'); notice.type = 'text/plain'; notice.id = 'third-party-notices'; notice.textContent = notices.join('\n\n'); root.querySelector('head').append(notice);
-    }
-    return '<!doctype html>\n' + root.outerHTML;
-  }
-  $('#export-button').addEventListener('click', async () => {
-    const next = collectSettings(); if (!next) return;
-    const button = $('#export-button'); button.disabled = true; $('#setup-error').textContent = '正在打包婚礼邀请函与照片…';
-    try {
-      config = next; render(); saveDraft();
-      const html = await standaloneSource(next);
-      download(new Blob([html], { type: 'text/html;charset=utf-8' }), '幸福小岛-婚礼邀请函.html');
-      $('#setup-error').textContent = ''; toast('专属邀请函已导出，照片和婚礼信息都在里面 ♡');
-    } catch { $('#setup-error').textContent = '导出未完成。请用附带的「婚礼邀请函.html」单文件版本重试，或保持本地预览服务开启。'; }
-    finally { button.disabled = false; }
   });
 
   const audio = $('#island-music'); audio.volume = .42;
