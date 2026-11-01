@@ -2503,17 +2503,67 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   });
 
   const audio = $('#island-music'); audio.volume = .42;
-  let musicOn = false;
-  function updateMusic(on) { musicOn = on; $$('.music-button').forEach((button) => { button.setAttribute('aria-pressed', String(on)); button.setAttribute('aria-label', on ? '关闭小岛音乐' : '开启小岛音乐'); }); }
-  async function setMusic(on, quiet = false) {
-    try {
-      if (on) await audio.play(); else audio.pause(); updateMusic(on);
-      if (on && !quiet) toast('正在播放：动森 · 清晨 5 点 ♫');
-    } catch { updateMusic(false); if (!quiet) toast('音乐暂未播放，请再点一下音乐按钮。'); }
+  let musicWanted = false;
+  let musicRevision = 0;
+  let musicRequest;
+  function updateMusic(on) {
+    $$('.music-button').forEach((button) => {
+      button.setAttribute('aria-pressed', String(on));
+      button.setAttribute('aria-label', on ? '关闭小岛音乐' : musicWanted ? '恢复小岛音乐' : '开启小岛音乐');
+    });
   }
-  $$('.music-button').forEach((button) => button.addEventListener('click', () => setMusic(!musicOn)));
-  audio.addEventListener('pause', () => updateMusic(false)); audio.addEventListener('play', () => updateMusic(true));
-  document.addEventListener('visibilitychange', () => { if (document.hidden && musicOn) setMusic(false); });
+  function resumeMusic(quiet = true) {
+    if (!musicWanted || document.hidden) return Promise.resolve();
+    if (!audio.paused) { updateMusic(true); return Promise.resolve(); }
+    if (musicRequest) return musicRequest;
+    const revision = musicRevision;
+    const request = (async () => {
+      try {
+        await audio.play();
+        if (revision !== musicRevision || !musicWanted || document.hidden) {
+          if (!musicWanted || document.hidden) audio.pause();
+          return;
+        }
+        updateMusic(true);
+        if (!quiet) toast('正在播放：动森 · 清晨 5 点 ♫');
+      } catch {
+        if (revision !== musicRevision) return;
+        updateMusic(false);
+        if (!quiet) toast('音乐暂未播放，请再点一下音乐按钮。');
+      }
+    })().finally(() => { if (musicRequest === request) musicRequest = undefined; });
+    musicRequest = request;
+    return request;
+  }
+  function suspendMusic() {
+    // Keep playback intent and position when Safari/WeChat backgrounds this page.
+    musicRevision++; musicRequest = undefined;
+    audio.pause(); updateMusic(false);
+  }
+  function setMusic(on, quiet = false) {
+    musicWanted = on;
+    if (!on) { suspendMusic(); return; }
+    return resumeMusic(quiet);
+  }
+  $$('.music-button').forEach((button) => button.addEventListener('click', () => {
+    if (musicWanted && audio.paused && !musicRequest) resumeMusic(false);
+    else setMusic(!musicWanted);
+  }));
+  audio.addEventListener('pause', () => updateMusic(!audio.paused && !document.hidden));
+  audio.addEventListener('play', () => {
+    if (!musicWanted || document.hidden) { audio.pause(); return; }
+    updateMusic(true);
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) suspendMusic(); else resumeMusic(); });
+  window.addEventListener('pagehide', suspendMusic);
+  window.addEventListener('pageshow', () => resumeMusic());
+  window.addEventListener('focus', () => resumeMusic());
+  document.addEventListener('WeixinJSBridgeReady', () => resumeMusic());
+  // If automatic resume is blocked, retry inside the next real user gesture.
+  function resumeMusicOnGesture(event) {
+    if (!event.target.closest?.('.music-button')) resumeMusic();
+  }
+  for (const type of ['pointerdown', 'touchend', 'click', 'keydown']) document.addEventListener(type, resumeMusicOnGesture, true);
 
   if ('IntersectionObserver' in window) {
     document.documentElement.classList.add('js-ready');
