@@ -30,6 +30,19 @@
   let appliedFontData = '';
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  const buttonAnimations = new WeakMap();
+  function animateButton(event) {
+    if (reducedMotion || (event.type === 'pointerdown' && (event.button !== 0 || !event.isPrimary))) return;
+    const button = event.target.closest('button, a.animal-btn');
+    if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true' || typeof button.animate !== 'function') return;
+    buttonAnimations.get(button)?.cancel();
+    // Scale is independent of transform, preserving tilted photos and floating gifts.
+    const animation = button.animate([{ scale: '1' }, { scale: '.94', offset: .3 }, { scale: '1.025', offset: .7 }, { scale: '1' }], { duration: 260, easing: 'ease-out' });
+    buttonAnimations.set(button, animation);
+  }
+  document.addEventListener('pointerdown', animateButton, true);
+  document.addEventListener('click', event => { if (event.detail === 0) animateButton(event); }, true);
+
   function safePhoto(src) {
     if (typeof src !== 'string' || !src) return '';
     if (/^data:image\/(jpeg|png|webp|gif);base64,/i.test(src)) return src;
@@ -377,8 +390,8 @@
     };
     if (reducedMotion) land();
     else {
-      flightTimers.push(setTimeout(() => { $('#flight-title').textContent = '正飞往幸福小岛…'; $('#flight-status').textContent = '穿过云朵，带着满满的期待。'; }, 1000));
-      flightTimers.push(setTimeout(land, 3200));
+      flightTimers.push(setTimeout(() => { $('#flight-title').textContent = '正飞往幸福小岛…'; $('#flight-status').textContent = '穿过云朵，带着满满的期待。'; }, 400));
+      flightTimers.push(setTimeout(land, 1500));
     }
   });
   flight.addEventListener('close', () => { flightTimers.forEach(clearTimeout); flightTimers = []; });
