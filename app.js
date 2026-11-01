@@ -122,10 +122,6 @@
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   function updateJourney() {
     $$('[data-journey]').forEach(element => { element.hidden = steps.indexOf(element.dataset.journey) > unlockedStep; });
-    $$('#page-nav a, #page-nav [data-rsvp]').forEach(link => {
-      const target = link.hasAttribute('data-rsvp') ? 'rsvp' : link.hash.slice(1);
-      link.setAttribute('aria-disabled', String(steps.indexOf(target) > unlockedStep));
-    });
   }
   function goToStep(target, advance = false) {
     const index = steps.indexOf(target);
@@ -304,14 +300,13 @@
     if (withMusic) setMusic(true, true);
     setTimeout(() => {
       opening.hidden = true; openingComplete = true;
-      $('#invitation').inert = false; $('#page-nav').inert = false;
+      $('#invitation').inert = false;
       $('#hero-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' });
     }, reducedMotion ? 0 : 550);
   }
   $('#hero-title').setAttribute('tabindex', '-1');
   $('#open-gift').addEventListener('click', () => enterIsland(true));
   $('#skip-opening').addEventListener('click', () => enterIsland(true));
-  $('#open-gift').focus({ preventScroll: true });
 
   function showDialog(dialog) {
     lastFocus = document.activeElement;
@@ -357,7 +352,6 @@
   });
 
   const rsvpForm = $('#rsvp-form');
-  $$('[data-rsvp]').forEach((button) => button.addEventListener('click', () => goToStep('rsvp')));
   rsvpForm.elements.attendance.addEventListener('change', () => { $('#guests-label').hidden = rsvpForm.elements.attendance.value === 'bless'; });
   let rsvpSubmitting = false;
   rsvpForm.addEventListener('submit', async (event) => {
@@ -462,7 +456,5 @@
     document.documentElement.classList.add('js-ready');
     const reveal = new IntersectionObserver((entries) => { entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('visible'); reveal.unobserve(entry.target); } }); }, { threshold: .08 });
     $$('.reveal').forEach((element) => reveal.observe(element));
-    const nav = new IntersectionObserver((entries) => { entries.forEach((entry) => { if (entry.isIntersecting) { $$('.desktop-nav a,.mobile-nav a').forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${entry.target.id}`)); } }); }, { rootMargin: '-15% 0px -65% 0px' });
-    $$('main>section[id]').forEach((element) => nav.observe(element));
   }
 })();
