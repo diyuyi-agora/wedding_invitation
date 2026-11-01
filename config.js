@@ -3,16 +3,16 @@
 window.WEDDING_CONFIG = {
   groom: '新郎',
   bride: '新娘',
-  date: '',             // 格式：2027-05-20
-  time: '',             // 格式：16:00
-  venue: '',
-  address: '',
-  mapUrl: '',           // 高德 / 腾讯地图的 https 分享链接，可留空
+  date: '2027-01-02',
+  time: '18:00',
+  venue: '东台磊达大酒店 · 牡丹厅',
+  address: '江苏省盐城市东台市东园路99号 · 牡丹厅',
+  mapUrl: 'https://surl.amap.com/gb5SXDo1j2on',
   groomPhone: '',
   bridePhone: '',
   fontData: '',          // 可填写字体 data URL
   fontName: '',
-  schedule: ['15:30', '16:00', '17:00', '19:00'],
+  schedule: ['', '18:00', '', ''], // 其余环节尚未确定具体时间，以当天安排为准
   photos: [
     '',                                      // 故事附图，暂不展示
     'assets/photos/classic-portrait.webp',    // 相册主图 · 双人全身照

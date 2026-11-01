@@ -39,7 +39,7 @@
     result.groom = result.groom || '新郎'; result.bride = result.bride || '新娘';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(result.date) || Number.isNaN(new Date(`${result.date}T00:00:00+08:00`).getTime()) || new Date(`${result.date}T12:00:00Z`).toISOString().slice(0, 10) !== result.date) result.date = '';
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result.time)) result.time = '';
-    result.schedule = defaults.schedule.map((fallback, i) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value.schedule?.[i]) ? value.schedule[i] : fallback);
+    result.schedule = defaults.schedule.map((fallback, i) => value.schedule?.[i] === '' ? '' : /^([01]\d|2[0-3]):[0-5]\d$/.test(value.schedule?.[i]) ? value.schedule[i] : fallback);
     result.photos = defaults.photos.map((_, i) => safePhoto(value.photos?.[i]));
     return result;
   }
@@ -93,10 +93,11 @@
     $$('#pass-date, [data-pass-date]').forEach((element) => { element.textContent = config.date ? formatDate(config.date, true) : '婚期待定'; });
     $$('#pass-time, [data-pass-time]').forEach((element) => { element.textContent = config.time || '时间待定'; });
     $$('[data-wedding-date]').forEach((element) => { element.textContent = config.date ? formatDate(config.date, true) : '好日子 · 待揭晓'; });
-    $$('[data-wedding-time]').forEach((element) => { element.textContent = config.time ? `${config.time} · 心动仪式` : '仪式时间待填写'; });
+    $$('[data-wedding-time]').forEach((element) => { element.textContent = config.time ? `${config.time} · 婚礼开始` : '婚礼时间待填写'; });
     $('#schedule-date').textContent = formatDate(config.date);
-    $$('[data-schedule]').forEach((element) => { element.textContent = config.schedule[Number(element.dataset.schedule)]; });
-    $('#schedule-note').textContent = config.date ? '把这一天交给幸福，把好心情带来就好。' : '以上为参考流程，具体时间等我们揭晓。';
+    const scheduleLabels = ['入席前', '婚礼开始', '仪式后', '晚宴间'];
+    $$('[data-schedule]').forEach((element) => { const index = Number(element.dataset.schedule); element.textContent = config.schedule[index] || scheduleLabels[index]; });
+    $('#schedule-note').textContent = config.date && config.time ? `婚礼于 ${config.time} 开始，其余环节以当日安排为准。` : '以上为参考流程，具体时间等我们揭晓。';
     renderCalendar(); applyFont();
     $$('[data-photo]').forEach((frame) => {
       const content = frame.querySelector('.photo-content');
@@ -389,7 +390,7 @@
     const summary = attending ? `一定赴约 · 共 ${count} 位\n期待登岛，见证你们的幸福！` : '虽然无法到场，祝福一定准时抵达。';
     $('#receipt-name').textContent = `${guest} ${attending ? '准备好登岛啦' : '为你们送上祝福'}`;
     $('#receipt-summary').textContent = summary; $('#receipt-wish').textContent = wish;
-    receiptText = `🏝 幸福小岛 · 婚礼回执\n致 ${config.groom} & ${config.bride}\n\n我是：${guest}\n${attending ? `一定到场，共 ${count} 位` : '远程送上祝福'}\n${config.date ? `日期：${formatDate(config.date)}\n` : ''}${config.venue ? `地点：${config.venue}\n` : ''}\n${wish}\n\n愿小岛的每一天，都是晴天。♡`;
+    receiptText = `🏝 幸福小岛 · 婚礼回执\n致 ${config.groom} & ${config.bride}\n\n我是：${guest}\n${attending ? `一定到场，共 ${count} 位` : '远程送上祝福'}\n${config.date ? `日期：${formatDate(config.date)}\n` : ''}${config.time ? `时间：${config.time}\n` : ''}${config.venue ? `地点：${config.venue}\n` : ''}\n${wish}\n\n愿小岛的每一天，都是晴天。♡`;
     $('#rsvp-result').hidden = false; showDialog($('#rsvp-dialog'));
     $('#copy-receipt').focus(); celebrate();
   });
