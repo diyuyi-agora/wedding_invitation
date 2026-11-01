@@ -102,13 +102,19 @@
       const content = frame.querySelector('.photo-content');
       content.querySelector('img')?.remove();
       const src = config.photos[Number(frame.dataset.photo)];
+      frame.hidden = !src;
+      Array.from(content.children).forEach(element => element.toggleAttribute('hidden', Boolean(src)));
       if (src) {
         const image = new Image(); image.alt = photoSlots.find((slot) => slot.index === Number(frame.dataset.photo))?.name || '我们的婚纱照';
         image.loading = 'lazy'; image.decoding = 'async'; image.src = src;
-        image.addEventListener('error', () => { image.remove(); frame.dataset.loaded = 'false'; });
+        image.addEventListener('error', () => { image.remove(); frame.dataset.loaded = 'false'; frame.hidden = true; });
         content.append(image); frame.dataset.loaded = 'true';
       } else { frame.dataset.loaded = 'false'; }
     });
+    $$('.calendar-memory, .day-memory, .closing-memories').forEach(container => {
+      container.hidden = !Array.from(container.querySelectorAll('[data-photo]')).some(frame => !frame.hidden);
+    });
+    $('.closing-photo-pair').dataset.photoCount = String($$('.closing-photo-pair [data-photo]').filter(frame => !frame.hidden).length);
     const named = config.groom !== '新郎' || config.bride !== '新娘';
     document.title = named ? `${config.groom} & ${config.bride} · 婚礼森友会` : '集合啦！婚礼森友会';
     $('meta[property="og:title"]').content = document.title;

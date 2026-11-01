@@ -108,3 +108,6 @@ dialog{border:0;background:#fff8e5;color:var(--ink);font-family:var(--font);marg
 
 /* The gift stays clickable without a rectangular focus frame. */
 #open-gift:focus,#open-gift:focus-visible{outline:none;box-shadow:none}#open-gift:focus-visible .present-box{filter:drop-shadow(0 0 6px #fff)}
+
+/* Match the supplied portraits and landscapes without cropping people. */
+.welcome-postcard .photo-content{aspect-ratio:3/2}.broadcast-snapshot .photo-content,.album-grid .photo-content,.closing-photo .photo-content{aspect-ratio:2/3}.closing-photo-pair[data-photo-count="1"]{grid-template-columns:minmax(0,1fr);max-width:310px;margin:0 auto}.closing-photo-pair[data-photo-count="1"] .closing-photo{margin-top:0}

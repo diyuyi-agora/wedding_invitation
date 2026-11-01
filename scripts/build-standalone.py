@@ -22,8 +22,11 @@ def stylesheet(match):
 
 html = (ROOT / 'index.html').read_text()
 html = re.sub(r'<link rel="stylesheet" href="([^"]+)">', stylesheet, html)
+config = (ROOT / 'config.js').read_text()
+config = re.sub(r"(['\"])(assets/photos/[^'\"]+)\1",
+                lambda item: f'{item[1]}{data_url(item[2])}{item[1]}', config)
 html = re.sub(r'<script id="wedding-config"[^>]*></script>',
-              lambda _: '<script id="wedding-config">\n' + (ROOT / 'config.js').read_text() + '</script>', html)
+              lambda _: '<script id="wedding-config">\n' + config + '</script>', html)
 html = re.sub(r'  <script id="app-code"[^>]*></script>\n', '', html)
 html = re.sub(r'(src|href)="(assets/[^"]+)"',
               lambda item: f'{item[1]}="{data_url(item[2])}"', html)

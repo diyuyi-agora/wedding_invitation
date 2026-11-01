@@ -13,5 +13,18 @@ window.WEDDING_CONFIG = {
   fontData: '',          // 可填写字体 data URL
   fontName: '',
   schedule: ['15:30', '16:00', '17:00', '19:00'],
-  photos: ['', '', '', '', '', '', '', '', '', '', '', ''], // 保留原前 4 张位置；新增 8 张穿插在登岛、广播、仪式、日历、日程、地图和结尾
+  photos: [
+    '',                                      // 故事附图，暂不展示
+    'assets/photos/classic-portrait.webp',    // 相册主图 · 双人全身照
+    'assets/photos/riverside-embrace.webp',   // 相册 · 江畔相拥
+    'assets/photos/city-stroll.webp',         // 相册 · 街头牵手
+    'assets/photos/garden-promise.webp',      // 登岛 · 花园横图
+    'assets/photos/bride-bouquet.webp',       // 广播 · 新娘竖照
+    'assets/photos/veil-moment.webp',         // 仪式 · 头纱横图
+    '',                                      // 日历附图，暂不展示
+    '',                                      // 日程附图，暂不展示
+    '',                                      // 地图附图，暂不展示
+    'assets/photos/shared-smile.webp',        // 结尾 · 双人笑颜
+    '',                                      // 结尾第二张，暂不展示
+  ],
 };
