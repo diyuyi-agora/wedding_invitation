@@ -9,6 +9,8 @@ function page(title, message) {
 function createApp({ config = {}, analytics = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // The container port is bound to localhost and reached through the local reverse proxy.
+  app.set('trust proxy', 1);
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' });
     if (req.path.startsWith('/api/') || req.path === '/health') res.set('Cache-Control', 'no-store');

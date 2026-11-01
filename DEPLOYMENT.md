@@ -1,8 +1,10 @@
 # 线上部署
 
-本项目默认部署服务器为 `ubuntu@42.192.38.33`，邀请函入口为 <https://hanhandi.cn/wedding/>。登录凭证单独保管，不放入仓库。
+本项目默认部署服务器为 `ubuntu@42.192.38.33`，服务器 IP 入口为 <http://42.192.38.33/wedding/>，现有域名入口为 <https://hanhandi.cn/wedding/>。登录凭证单独保管，不放入仓库。
 
 现有 Compose 项目位于 `/home/ubuntu/code/compose.yaml`，项目名 `hanhandi`，服务名 `wedding`。部署时仅更新该服务，继续绑定 `127.0.0.1:5001:5000`。Nginx 经已有 OpenResty 路由将 `/wedding/` 转发到 `127.0.0.1:5001/`，移除路径前缀。前端 API 地址相对当前邀请函目录解析，兼容该路由和站点根目录。
+
+边缘 Nginx 的 wedding 路由应设置 `X-Forwarded-Proto $scheme`，由 OpenResty 继续传给 Node。应用信任直接连接的本地代理；HTTPS 请求使用 Secure 访客 Cookie，HTTP IP 入口使用普通 HttpOnly Cookie，以保证访客识别和重复提交去重。
 
 代码按 Git 提交归档到 `/home/ubuntu/code/wedding/releases/<commit>/`，以该目录为 Docker 构建上下文。使用根目录 `Dockerfile`，镜像标签为 `hanhandi-wedding:<commit>`。配置示例：
 

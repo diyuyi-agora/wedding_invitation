@@ -64,7 +64,7 @@ function mountAnalytics(app, { analytics, production, origin: publicOrigin }) {
   function visitor(req, res) {
     const existing = (req.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith('wedding_visitor='))?.slice('wedding_visitor='.length);
     const id = /^[a-f0-9]{64}$/.test(existing || '') ? existing : crypto.randomBytes(32).toString('hex');
-    if (id !== existing) res.cookie('wedding_visitor', id, { httpOnly: true, sameSite: 'lax', secure: production, path: '/', maxAge: 365 * 86400000 });
+    if (id !== existing) res.cookie('wedding_visitor', id, { httpOnly: true, sameSite: 'lax', secure: production && req.secure, path: '/', maxAge: 365 * 86400000 });
     return crypto.createHash('sha256').update(id).digest('hex');
   }
   function mutation(req, res, next) {

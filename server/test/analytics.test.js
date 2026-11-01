@@ -62,3 +62,21 @@ test('analytics API validates requests, maintains private visitor identity and h
   assert.equal((await unavailable.text()).includes('secret'), false);
   for (const url of ['/server/.env', '/.env', '/server/analytics.js']) assert.equal((await fetch(origin + url)).status, 404);
 });
+
+test('visitor cookies follow the forwarded protocol on the production proxy', async t => {
+  const result = { visits: 1, visitors: 1, blessings: 0, blessed: false, messageSent: false };
+  const analytics = { async read() { return result; }, async visit() { return result; } };
+  const server = createApp({ config: { production: true, origin: 'https://island.example' }, analytics }).listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const https = await fetch(origin + '/api/stats', { headers: { 'x-forwarded-proto': 'https' } });
+  assert.match(https.headers.get('set-cookie'), /; Secure;/);
+  const http = await fetch(origin + '/api/stats', { headers: { 'x-forwarded-proto': 'http' } });
+  assert.doesNotMatch(http.headers.get('set-cookie'), /; Secure;/);
+  assert.match(http.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
+  const cookie = http.headers.get('set-cookie').split(';')[0];
+  const visit = await fetch(origin + '/api/visits', { method: 'POST', headers: { origin, cookie, 'x-forwarded-proto': 'http', 'content-type': 'application/json' }, body: JSON.stringify({ visitId: 'proxy-visit-12345678' }) });
+  assert.equal(visit.status, 200);
+  assert.equal(visit.headers.has('set-cookie'), false);
+});
