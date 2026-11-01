@@ -426,11 +426,6 @@
     if (!config.address) { toast('幸福的坐标还在准备中，稍后告诉你 ♡'); return; }
     try { await copy(`${config.venue}\n${config.address}`); toast('婚礼地址已复制，粘贴到地图即可导航。'); } catch { toast(`婚礼地址：${config.address}`); }
   });
-  $$('[data-contact]').forEach((button) => button.addEventListener('click', () => {
-    const person = button.dataset.contact; const phone = config[`${person}Phone`];
-    if (!phone) { toast(`${person === 'groom' ? '新郎' : '新娘'}的联系电话还未填写，可直接在微信联系新人。`); return; }
-    location.href = `tel:${phone.replace(/[^+\d]/g, '')}`;
-  }));
   function download(blob, filename) {
     const link = document.createElement('a'); const url = URL.createObjectURL(blob);
     link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
