@@ -160,6 +160,8 @@
   let statsTask = Promise.resolve();
   let publishTask;
   const onlinePage = ['http:', 'https:'].includes(location.protocol);
+  const apiBase = new URL('.', location.href);
+  const apiUrl = path => new URL(path.replace(/^\/+/, ''), apiBase).href;
   const visitId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   function renderBlessings() {
     const status = $('#blessing-status'); status.replaceChildren();
@@ -171,7 +173,7 @@
     $$('[data-write-blessing]').forEach(button => { button.disabled = statsBusy || messageSent; });
   }
   async function statsRequest(path, body) {
-    const response = await fetch(path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+    const response = await fetch(apiUrl(path), { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
       headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error('Statistics unavailable');
     const data = await response.json();
@@ -222,7 +224,7 @@
     feedTask = (async () => {
       try {
         if (!onlinePage) throw new Error('Offline invitation');
-        const response = await fetch('/api/blessings', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(8000) });
+        const response = await fetch(apiUrl('/api/blessings'), { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(8000) });
         if (!response.ok) throw new Error('Blessings unavailable');
         const data = await response.json();
         if (!Array.isArray(data.messages)) throw new Error('Invalid blessings');

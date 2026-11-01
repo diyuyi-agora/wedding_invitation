@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/.env
+**/.env.*
+**/.alipay-*.json
+**/data
+**/output
+**/.playwright-cli
+**/*.log
+.DS_Store

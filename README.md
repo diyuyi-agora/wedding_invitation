@@ -14,6 +14,7 @@
 
 服务端 `server/.env` 保存本地 Redis 配置，启动时自动读取；文件被 Git 忽略，不会进入前端或离线文件。其他环境配置 `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`，参考 [server/.env.example](server/.env.example)。启动与部署配置见 [服务说明](server/README.md)。
 
+服务器、现有 Docker Compose 服务和 `/wedding/` 路由说明见 [线上部署](DEPLOYMENT.md)。
 
 ## 文件
 
