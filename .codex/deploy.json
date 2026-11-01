@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "enabled": true,
+  "git": { "remote": "origin", "branch": "main" },
+  "server": { "host": "42.192.38.33", "user": "ubuntu", "root": "/home/ubuntu/code" },
+  "compose": {
+    "project": "hanhandi",
+    "directory": "/home/ubuntu/code",
+    "files": ["/home/ubuntu/code/compose.yaml"],
+    "services": ["wedding"],
+    "require_health": true
+  },
+  "release": {
+    "directory": "/home/ubuntu/code/wedding/releases",
+    "image_repository": "hanhandi-wedding",
+    "dockerfile": "Dockerfile",
+    "build_args": { "NODE_IMAGE": "docker.1panel.live/library/node:24-alpine" },
+    "environment_file": "/home/ubuntu/code/wedding.env"
+  },
+  "route": {
+    "public_url": "http://42.192.38.33/wedding/",
+    "prefix": "/wedding/",
+    "strip_prefix": true,
+    "upstream": "http://127.0.0.1:5001",
+    "health_url": "http://42.192.38.33/wedding/health"
+  },
+  "checks": [
+    { "cwd": ".", "argv": ["npm", "--prefix", "server", "test"] },
+    { "cwd": ".", "argv": ["npm", "--prefix", "server", "run", "check"] },
+    { "cwd": ".", "argv": ["node", "--check", "app.js"] }
+  ],
+  "build": [
+    { "cwd": ".", "argv": ["python3", "scripts/build-standalone.py"] }
+  ]
+}
