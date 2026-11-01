@@ -29,7 +29,7 @@ function createApp({ config = {}, analytics = null } = {}) {
     const asset = pathname.startsWith('/assets/');
     if (!allowed.has(pathname) && !asset) return next();
     const file = asset ? pathname.slice('/assets/'.length) : pathname === '/' ? 'index.html' : pathname.slice(1);
-    return res.sendFile(file, { root: asset ? path.join(publicRoot, 'assets') : publicRoot, dotfiles: 'deny' }, error => { if (error) next(); });
+    return res.sendFile(file, { root: asset ? path.join(publicRoot, 'assets') : publicRoot, dotfiles: 'deny', maxAge: asset ? '1d' : 0 }, error => { if (error) next(); });
   });
   app.use((req, res) => {
     if (req.path.startsWith('/api/')) return res.status(404).json({ error: '接口不存在' });

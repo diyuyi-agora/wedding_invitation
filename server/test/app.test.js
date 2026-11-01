@@ -33,6 +33,10 @@ test('invitation runs without payment services and retired routes are unavailabl
     assert.equal(response.headers.has('set-cookie'), false);
   }
   for (const path of ['/server/.env', '/server/.alipay-sandbox.json', '/server/data/payments.sqlite', '/server/app.js', '/node_modules/express/package.json', '/assets/%2e%2e%2fserver%2fanalytics.js']) assert.equal((await fetch(origin + path)).status, 404, path);
-  assert.equal((await fetch(origin + '/assets/leaf.svg')).status, 200);
+  const asset = await fetch(origin + '/assets/leaf.svg');
+  assert.equal(asset.status, 200);
+  assert.match(asset.headers.get('cache-control'), /max-age=86400/);
+  const code = await fetch(origin + '/app.js');
+  assert.match(code.headers.get('cache-control'), /max-age=0/);
   assert.equal((await fetch(origin + '/api/stats')).status, 503);
 });

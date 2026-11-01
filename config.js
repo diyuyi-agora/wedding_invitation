@@ -26,5 +26,9 @@ window.WEDDING_CONFIG = {
     '',                                      // 地图附图，暂不展示
     'assets/photos/shared-smile.webp',        // 结尾 · 双人笑颜
     '',                                      // 结尾第二张，暂不展示
+    'assets/photos/traditional-gaze.webp',    // 相册 · 喜服相望
+    'assets/photos/traditional-playful.webp', // 相册 · 你的可爱
+    'assets/photos/traditional-announcement.webp', // 相册 · 余生官宣
+    'assets/photos/traditional-knot.webp',    // 相册 · 喜结良缘
   ],
 };

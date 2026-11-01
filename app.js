@@ -13,8 +13,12 @@
     { index: 9, name: '坐标 · 有你的地方', shape: '横图 3:2' },
     { index: 10, name: '结尾 · 今日晴天', shape: '竖图 3:4' },
     { index: 11, name: '结尾 · 以后每一天', shape: '竖图 3:4' },
+    { index: 12, name: '相册 · 喜服相望', shape: '横图 3:2' },
+    { index: 13, name: '相册 · 你的可爱', shape: '横图 3:2' },
+    { index: 14, name: '相册 · 余生官宣', shape: '竖图 2:3' },
+    { index: 15, name: '相册 · 喜结良缘', shape: '竖图 2:3' },
   ];
-  const defaults = { groom: '新郎', bride: '新娘', date: '', time: '', venue: '', address: '', mapUrl: '', groomPhone: '', bridePhone: '', fontData: '', fontName: '', schedule: ['15:30', '16:00', '17:00', '19:00'], photos: Array.from({ length: 12 }, () => '') };
+  const defaults = { groom: '新郎', bride: '新娘', date: '', time: '', venue: '', address: '', mapUrl: '', groomPhone: '', bridePhone: '', fontData: '', fontName: '', schedule: ['15:30', '16:00', '17:00', '19:00'], photos: Array.from({ length: 16 }, () => '') };
   const initial = Object.assign({}, defaults, window.WEDDING_CONFIG || {});
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -107,7 +111,7 @@
       Array.from(content.children).forEach(element => element.toggleAttribute('hidden', Boolean(src)));
       if (src) {
         const image = new Image(); image.alt = photoSlots.find((slot) => slot.index === Number(frame.dataset.photo))?.name || '我们的婚纱照';
-        image.loading = 'lazy'; image.decoding = 'async'; image.src = src;
+        image.loading = 'eager'; image.decoding = 'async'; image.fetchPriority = 'low'; image.src = src;
         image.addEventListener('error', () => { image.remove(); frame.dataset.loaded = 'false'; frame.hidden = true; });
         content.append(image); frame.dataset.loaded = 'true';
       } else { frame.dataset.loaded = 'false'; }
@@ -122,6 +126,33 @@
     if (config.date) $('meta[property="og:description"]').content = `${formatDate(config.date)}，${config.venue || '幸福小岛'}。你来，就是最好的礼物。`;
   }
   render();
+
+  // Start every image request during the opening, including hidden chapters.
+  // Decode a few at a time to avoid a burst of work on mobile devices.
+  async function preparePageImages() {
+    const images = new Map();
+    $$('img[src]').forEach(image => {
+      image.loading = 'eager'; image.decoding = 'async';
+      if (!images.has(image.src)) images.set(image.src, image);
+    });
+    $$('.dodo-ticket-header, .dodo-ticket-stub').forEach(element => {
+      const background = getComputedStyle(element).backgroundImage;
+      for (const match of background.matchAll(/url\((?:"([^"]*)"|'([^']*)'|([^)]*))\)/g)) {
+        const src = match[1] || match[2] || match[3];
+        if (!src || images.has(src)) continue;
+        const image = new Image(); image.decoding = 'async'; image.fetchPriority = 'low'; image.src = src;
+        images.set(src, image);
+      }
+    });
+    const queue = [...images.values()];
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (queue.length) {
+        const image = queue.shift();
+        try { await image.decode(); } catch { /* A failed image must not block the invitation. */ }
+      }
+    }));
+  }
+  preparePageImages();
 
   const steps = ['home', 'letter', 'boarding', 'story', 'album', 'schedule', 'rsvp'];
   let unlockedStep = 0;
